@@ -2,6 +2,8 @@ import os.path as op
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from nilearn import image
+from nilearn.input_data import NiftiMasker
 
 mb_orders = [[0, 2, 4], [4, 2, 0], [2, 0, 4]]
 
@@ -37,7 +39,7 @@ class Subject(object):
         self.derivatives_dir = op.join(bids_folder, 'derivatives')
 
 
-    def get_behavioral_data(self, session=None, tasks=None, raw=False, add_info=True):
+    def get_behavioral_data(self, session=None, tasks=None, raw=False, multiband=None, add_info=True):
 
         if session is None:
             data = pd.concat((self.get_behavioral_data(session, tasks, raw, add_info) for session in self.get_sessions()), keys=self.get_sessions(), names=['session'])
@@ -74,7 +76,7 @@ class Subject(object):
                     else:
                         d['range'] = 'narrow'
 
-
+                    d['multiband'] = mb_orders[session-1][(run - 1) % 3]
                     keys.append((self.subject_id, task, run))
                     df.append(d)
                 except Exception as e:
@@ -140,3 +142,63 @@ class Subject(object):
 
     def get_runs(self, session):
         return list(range(1, 7))
+
+    def get_single_trial_estimates(self, multiband, type='stim', smoothed=False, roi=None):
+
+        if roi is not None:
+            raise NotImplementedError('ROI not implemented')
+
+        dir = 'glm_stim1.denoise'
+
+        if smoothed:
+            dir += '.smoothed'
+
+        dir = op.join(self.bids_folder, 'derivatives', dir, f'sub-{self.subject_id}', 'func')
+        # sub-alina_task-task_space-T1w_acq-mb0_desc-R2_pe.nii.gz
+        fn = op.join(dir, f'sub-{self.subject_id}_task-task_space-T1w_acq-mb{multiband}_desc-{type}_pe.nii.gz')
+
+        im = image.load_img(fn, dtype=np.float32)
+
+        n_volumes = 240
+        assert(im.shape[3] == n_volumes), f'Expected {n_volumes} volumes, got {im.shape[3]}'
+
+        return im
+
+    def get_brain_mask(self, session=None, epi_space=True, return_masker=True, debug_mask=False):
+
+        if not epi_space:
+            raise ValueError('Only EPI space is supported')
+
+        session = 1 if session is None else session
+
+        # sub-alina_ses-1_task-numestimate_acq-mb0_dir-LR_run-01_desc-brain_mask.nii.gz
+        fn = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}',
+                    f'ses-{session}', 'func', 
+                    f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-brain_mask.nii.gz')
+
+        mask_img = image.load_img(fn)
+
+        if debug_mask:
+            # Convert to numpy array
+            mask_data = mask_img.get_fdata()
+
+            # Create a downsampled mask: keep 1 in 100 voxels
+            mask_indices = np.argwhere(mask_data > 0)
+            np.random.shuffle(mask_indices)
+            subsample_size = max(1, len(mask_indices) // 100)  # Ensure at least one voxel
+            subsample_indices = mask_indices[:subsample_size]
+
+            # Create a new empty mask
+            debug_mask_data = np.zeros_like(mask_data)
+
+            # Set the selected voxels to 1
+            for idx in subsample_indices:
+                debug_mask_data[tuple(idx)] = 1
+
+            # Create a new Nifti image
+            mask_img = image.new_img_like(mask_img, debug_mask_data)
+
+        if return_masker:
+            return NiftiMasker(mask_img=mask_img)
+
+        return mask_img
