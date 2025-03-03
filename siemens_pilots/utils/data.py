@@ -1,5 +1,29 @@
 import os.path as op
-    
+import pandas as pd
+import numpy as np
+from pathlib import Path
+
+mb_orders = [[0, 2, 4], [4, 2, 0], [2, 0, 4]]
+
+def get_lr_direction(session, run):
+    mb = mb_orders[session-1][(run-1) % 3]
+    repetition = (run-1) // 3 + 1
+
+    assert mb in [0, 2, 4]
+
+    if repetition == 1:
+        if mb in [0, 4]:
+            return 'LR'
+        else:
+            return 'RL'
+    else:
+        if mb in [0, 4]:
+            return 'RL'
+        else:
+            return 'LR'
+
+def get_run_from_mb(mb, session, repetition):
+    return mb_orders[session-1].index(mb) + (repetition-1) * 3 + 1
 class Subject(object):
 
 
@@ -38,7 +62,7 @@ class Subject(object):
             if task == 'feedback':
                 runs = [1, 5]
             elif task == 'estimation_task':
-                runs = list(range(1, 9))
+                runs = list(range(1, 7))
 
             for run in runs:
                 try:
@@ -80,3 +104,39 @@ class Subject(object):
             df['squared_error'] = df['error']**2
 
         return df
+
+    def get_sessions(self):
+        return [1,2,3]
+
+    def get_bold(self, session, run=None, repetition=None, mb=None):
+
+        assert(run is not None or ((repetition is not None) and (mb is not None))), 'Either run or repetition and mb must be specified'
+
+        if run is None:
+            assert mb in [0, 2, 4], 'mb must be 0, 2 or 4'
+            assert repetition in [1,2], 'repetition must be 1 or 2'
+            run = get_run_from_mb(mb, session, repetition)
+
+        if mb is None:
+            mb = mb_orders[session-1][(run - 1) % 3]
+            repetition = run // 3 + 1
+
+        lr_direction = get_lr_direction(session, run)
+
+        preproc_folder = Path(self.derivatives_dir, 'fmriprep', f'sub-{self.subject_id}', f'ses-{session}', 'func')
+
+        # sub-alina_ses-1_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-preproc_bold.nii.gz
+        fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
+
+        assert(fn.exists()), f'File {fn} does not exist'
+
+        return fn
+
+    def get_onsets(self, session, run):
+
+        onsets = pd.read_csv(op.join(self.bids_folder, f'sub-{self.subject_id}', f'ses-{session}', 'func', f'sub-{self.subject_id}_ses-{session}_task-task_run-{run}_events.tsv'), index_col='trial_nr', sep='\t')
+
+        return onsets
+
+    def get_runs(self, session):
+        return list(range(1, 7))
