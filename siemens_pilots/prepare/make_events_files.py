@@ -11,7 +11,7 @@ def main(subject, session, bids_folder):
 
     d = subject.get_behavioral_data(session=session, tasks=['estimation_task'], raw=True, add_info=False).droplevel([0, 1])
     print(d.iloc[:25])
-    onset0 = d.groupby('run').apply(lambda x: x.xs('trigger_1', 0, 'event_type')['onset'])
+    onset0 = d.groupby('run').apply(lambda x: x.xs('pulse', 0, 'event_type')['onset'].iloc[0])
     d['onset'] -= onset0.loc[d.index.get_level_values('run')].values
     d['trial_nr'] = (d.index.get_level_values('run') - 1) * 40 + d['trial_nr']
     d = d.set_index('trial_nr', append=True) 
