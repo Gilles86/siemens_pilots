@@ -31,9 +31,10 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
             ims.append(sub.get_bold(session, mb=mb, repetition=repetition))
             onsets.append(sub.get_onsets(session, run))
             keys.append((session, run))
+            print('Minimum onset: ', onsets[-1].onset.min())
+            print('Maximum onset: ', onsets[-1].onset.max())
 
     onsets = pd.concat(onsets, keys=keys, names=['session', 'run'])
-    print(onsets)
 
     base_dir = 'glm_stim1.denoise'
 
@@ -53,35 +54,49 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
 
     dms = []
 
-    for ((session, run), onset), im in zip (onsets.groupby(['session', 'run']), ims):
-        tr = image.load_img(im).header['pixdim'][4]
-        n = image.load_img(im).shape[-1]
-        frametimes = np.linspace(tr/2., (n - .5)*tr, n)
-        print(im, tr, n)
-        print(onset)
-        onset['onset'] = ((onset['onset']+tr/2.) // tr) * tr
+    # Loop over unique (session, run) pairs in the 'onsets' DataFrame and their corresponding images in 'ims'
+    for ((session, run), onset), im in zip(onsets.groupby(['session', 'run']), ims):
+        
+        # Load the image to extract the repetition time (TR) from the header
+        tr = image.load_img(im).header['pixdim'][4]  # TR is stored in the 5th index of 'pixdim'
 
-        dm = make_first_level_design_matrix(frametimes,
-                                            onset,
-                                            hrf_model='fir',
-                                            drift_model=None,
-                                            drift_order=0).drop('constant', axis=1).fillna(0.0)
+        # Extract the number of volumes (time points) in the fMRI image
+        n = image.load_img(im).shape[-1]  # Last dimension is the time dimension
 
+        # Generate an array of 'frametimes', corresponding to the middle of each TR window
+        frametimes = np.linspace(tr/2., (n - 0.5) * tr, n)
 
+        # Round onset times to the nearest valid frame time (ensuring alignment with frametimes)
+        onset['onset'] = np.clip(
+            np.round(onset['onset'] / (tr / 2)) * (tr / 2),  # Round to nearest half-TR
+            tr / 2,  # Ensure onsets are not lower than the first valid frame time
+            (n - 0.5) * tr  # Ensure onsets do not exceed the last frame time
+        )
+
+        # Generate the first-level design matrix using the onset times
+        dm = make_first_level_design_matrix(
+            frametimes,  # Time points for model sampling
+            onset,  # Onset times for events
+            hrf_model='fir',  # Use finite impulse response (FIR) HRF model
+            drift_model=None,  # No drift model applied
+            drift_order=0  # No polynomial drift terms
+        )
+
+        # Drop the 'constant' column (typically used for baseline adjustment)
+        dm = dm.drop('constant', axis=1).fillna(0.0)  # Replace NaN values with 0
+
+        # Clean column names by removing '_delay_0' suffix (if present)
         dm.columns = [c.replace('_delay_0', '') for c in dm.columns]
-        dm /= dm.max()
-        dm = np.round(dm)
-        print(dm)
+
+        # Append the design matrix to the list of design matrices
         dms.append(dm)
 
+
     dms = pd.concat(dms, keys=keys, names=['session', 'run'], axis=0).fillna(0.0)
-    print(dms)
+    dms /= dms.max()
+    dms = np.round(dms)
 
     X = [d.values for _, d in dms.groupby(['session', 'run'])]
-    print(X)
-
-    for x in X:
-        print(x.shape)
 
     # # create a directory for saving GLMsingle outputs
 
@@ -98,6 +113,7 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
     # for the purpose of this example we will keep the relevant outputs in memory
     # and also save them to the disk
     opt['wantfileoutputs'] = [0, 0, 0, 1]
+    opt['n_pcs'] = 20
 
     # see https://github.com/cvnlab/GLMsingle/pull/130
     # confounds = sub.get_confounds(session=session)
@@ -110,12 +126,19 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
 
     data = [image.load_img(im).get_fdata() for im in ims]
 
+    outputdir = op.join(base_dir, 'glmdenoise', f'mb-{mb}')
+    os.makedirs(outputdir, exist_ok=True)
+
+    figuredir = op.join(base_dir, 'figures', f'mb-{mb}')
+    os.makedirs(figuredir, exist_ok=True)
+
     results_glmsingle = glmsingle_obj.fit(
         X,
         data,
         0.6,
         tr,
-        outputdir=base_dir)
+        outputdir=outputdir,
+        figuredir=figuredir)
 
     betas = results_glmsingle['typed']['betasmd']
     betas = image.new_img_like(ims[0], betas)
@@ -124,12 +147,12 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
     
     fn_template = op.join(base_dir, 'sub-{subject}_task-task_space-T1w_acq-mb{mb}_desc-{par}_pe.nii.gz')
 
-    stim_betas.to_filename(fn_template.format(subject=subject, session=session, par='stim'))
-    resp_betas.to_filename(fn_template.format(subject=subject, session=session, par='response'))
+    stim_betas.to_filename(fn_template.format(subject=subject, par='stim', mb=mb))
+    resp_betas.to_filename(fn_template.format(subject=subject, par='response', mb=mb))
 
     r2 = results_glmsingle['typed']['R2']
     r2 = image.new_img_like(ims[0], r2)
-    r2.to_filename(fn_template.format(subject=subject, session=session, par='R2'))
+    r2.to_filename(fn_template.format(subject=subject, par='R2', mb=mb))
 
 
 if __name__ == '__main__':
