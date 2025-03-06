@@ -1,9 +1,12 @@
+import os
 import os.path as op
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from nilearn import image
+from nilearn import image, surface
 from nilearn.input_data import NiftiMasker
+from tqdm.contrib.itertools import product
+from itertools import product as product_
 
 mb_orders = [[0, 2, 4], [4, 2, 0], [2, 0, 4]]
 
@@ -116,6 +119,7 @@ class Subject(object):
 
         if run is None:
             assert mb in [0, 2, 4], 'mb must be 0, 2 or 4'
+
             assert repetition in [1,2], 'repetition must be 1 or 2'
             run = get_run_from_mb(mb, session, repetition)
 
@@ -123,12 +127,18 @@ class Subject(object):
             mb = mb_orders[session-1][(run - 1) % 3]
             repetition = run // 3 + 1
 
-        lr_direction = get_lr_direction(session, run)
 
         preproc_folder = Path(self.derivatives_dir, 'fmriprep', f'sub-{self.subject_id}', f'ses-{session}', 'func')
 
-        # sub-alina_ses-1_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-preproc_bold.nii.gz
-        fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
+        if session == 'philips':
+            assert mb in [-1, None]
+            # sub-alina_ses-philips_task-task_run-1_space-T1w_desc-preproc_bold.nii.gz
+            fn = preproc_folder / f'sub-{self.subject_id}_ses-philips_task-task_run-{run}_space-T1w_desc-preproc_bold.nii.gz'
+
+
+        else:
+            lr_direction = get_lr_direction(session, run)
+            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
 
         assert(fn.exists()), f'File {fn} does not exist'
 
@@ -202,3 +212,202 @@ class Subject(object):
             return NiftiMasker(mask_img=mask_img)
 
         return mask_img
+
+    def get_surf_info(self):
+        info = {'L':{}, 'R':{}}
+
+        for hemi in ['L', 'R']:
+
+            fs_hemi = {'L':'lh', 'R':'rh'}[hemi]
+
+            info[hemi]['inner'] = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}', 'anat', f'sub-{self.subject_id}_hemi-{hemi}_white.surf.gii')
+            info[hemi]['mid'] = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}', 'anat', f'sub-{self.subject_id}_hemi-{hemi}_thickness.shape.gii')
+            info[hemi]['outer'] = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}', 'anat', f'sub-{self.subject_id}_hemi-{hemi}_pial.surf.gii')
+            # info[hemi]['inflated'] = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}', 'ses-1', 'anat', f'sub-{self.subject_id}_ses-1_hemi-{hemi}_inflated.surf.gii')
+            info[hemi]['curvature'] = op.join(self.bids_folder, 'derivatives', 'fmriprep', 'sourcedata', 'freesurfer', f'sub-{self.subject_id}', 'surf', f'{fs_hemi}.curv')
+
+            for key in info[hemi]:
+                assert(op.exists(info[hemi][key])), f'{info[hemi][key]} does not exist'
+
+        return info
+
+    def get_prf_parameters_volume(self,
+            multiband,
+            smoothed=True,
+            keys=None,
+            roi=None,
+            return_image=False,
+            gaussian=True,
+            model_label=4):
+
+        dir = 'encoding_model'
+
+        dir += f'.model{model_label}'
+        
+        if gaussian:
+            dir += '.gaussian'
+        else:
+            dir += '.logspace'
+
+        if smoothed:
+            dir += '.smoothed'
+
+        parameters = []
+
+        assert keys is None or 'r2' not in keys, 'r2 is always included'
+
+        if keys is None:
+            keys = ['mu', 'sd', 'amplitude', 'baseline']
+
+        masker = self.get_volume_mask(roi=roi, epi_space=True, return_masker=True)
+
+        # sub-alina_acq-0_desc-amplitude.narrow.optim_space-T1w_pars.nii.gz
+        fn_template = op.join(self.bids_folder, 'derivatives', dir, f'sub-{self.subject_id}', 'func',
+                              'sub-{subject_id}_acq-mb{multiband}_desc-{parameter_key}.{range_n}.optim_space-T1w_pars.nii.gz')
+
+        for parameter_key, range_n in product_(keys, ['narrow', 'wide']):
+            fn = fn_template.format(parameter_key=parameter_key, multiband=multiband, subject_id=self.subject_id, range_n=range_n)
+            pars = pd.Series(masker.transform(fn).squeeze(), name=(parameter_key, range_n))
+            parameters.append(pars)
+
+
+        r2_fn = op.join(self.bids_folder, 'derivatives', dir, f'sub-{self.subject_id}', 'func', f'sub-{self.subject_id}_acq-mb{multiband}_desc-r2.optim_space-T1w_pars.nii.gz')
+
+        parameters.append(pd.Series(masker.transform(r2_fn).squeeze(), name=('r2', None)))
+        keys.append(['r2'])
+
+        parameters =  pd.concat(parameters, axis=1, names=['parameter', 'range']).astype(np.float32)
+
+        if return_image:
+            return masker.inverse_transform(parameters.T)
+
+        return parameters
+
+    def get_volume_mask(self, roi=None, session=1, epi_space=False, return_masker=False, verbose=False):
+        """Retrieve a volume mask, optionally in EPI space and as a NiftiMasker."""
+
+        def _log(msg):
+            """Helper function for verbose logging."""
+            if verbose:
+                print(msg)
+
+        _log(f"Session: {session}, ROI: {roi}, epi_space: {epi_space}, return_masker: {return_masker}")
+
+        # Load the base brain mask
+        base_mask_path = op.join(
+            self.bids_folder, 'derivatives', f'fmriprep/sub-{self.subject_id}/ses-{session}/func',
+            # sub-alina_ses-1_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-brain_mask.nii.gz
+            f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-brain_mask.nii.gz'
+        )
+        base_mask = image.load_img(base_mask_path, dtype='int32')  # Prevent weird nilearn warning
+
+        # Resample to first functional run (ensuring affine match)
+        first_run = self.get_bold(session=session, run=1)
+        base_mask = image.resample_to_img(base_mask, first_run, interpolation='nearest', force_resample=False, copy_header=True)
+        _log("Base mask loaded and resampled.")
+
+        # Handle case when ROI is None
+        if roi is None:
+            if epi_space:
+                mask = base_mask
+            else:
+                _log("ROI is None and epi_space=False -> Raising NotImplementedError")
+                raise NotImplementedError
+
+        # Handle anatomical masks
+        elif roi.startswith(('NPC', 'NF', 'NTO')):  # Tuple avoids multiple `or` conditions
+            _log(f"Processing ROI: {roi}")
+
+            anat_mask_path = op.join(
+                self.derivatives_dir, 'ips_masks', f'sub-{self.subject_id}', 'anat',
+                f'sub-{self.subject_id}_space-T1w_desc-{roi}_mask.nii.gz'
+            )
+
+            if epi_space:
+                epi_mask_path = op.join(
+                    self.derivatives_dir, 'ips_masks', f'sub-{self.subject_id}', 'func',
+                    f'ses-{session}', f'sub-{self.subject_id}_space-T1w_desc-{roi}_mask.nii.gz'
+                )
+
+                if not op.exists(epi_mask_path):
+                    _log(f"EPI mask does not exist: {epi_mask_path}, creating it.")
+
+                    # Ensure parent directory exists
+                    os.makedirs(op.dirname(epi_mask_path), exist_ok=True)
+
+                    # Resample anatomical mask to EPI space and save
+                    im = image.resample_to_img(
+                        image.load_img(anat_mask_path, dtype='int32'),
+                        image.load_img(base_mask, dtype='int32'),
+                        interpolation='nearest'
+                    )
+                    im.to_filename(epi_mask_path)
+                    _log(f"Saved new EPI mask: {epi_mask_path}")
+
+                mask = epi_mask_path
+            else:
+                mask = anat_mask_path
+
+        else:
+            _log(f"Unknown ROI: {roi} -> Raising NotImplementedError")
+            raise NotImplementedError
+
+        _log(f"Final mask path: {mask}")
+
+        # Load the final mask as a Nifti1Image
+        mask = image.load_img(mask, dtype='int32')
+        _log("Loaded final mask into Nifti1Image.")
+
+        # Return either a NiftiMasker or the raw mask
+        if return_masker:
+            _log("Returning NiftiMasker")
+            masker = NiftiMasker(mask_img=mask, resampling_target="data")  # Ensures compatibility with input images
+            masker.fit()
+            return masker
+
+        _log("Returning final mask as Nifti1Image.")
+        return mask
+
+    def get_prf_parameters_surf(self, multiband, model_label=4, smoothed=False, hemi=None, space='fsnative', gaussian=True):
+
+        parameter_keys = ['mu.narrow', 'mu.wide',
+                    'sd.narrow', 'sd.wide',
+                    'amplitude.narrow', 'amplitude.wide',
+                    'baseline.narrow', 'baseline.wide',
+                    'r2']        
+
+        if hemi is None:
+            prf_l = self.get_prf_parameters_surf(multiband, model_label, smoothed, hemi='L', space=space)
+            prf_r = self.get_prf_parameters_surf(multiband, model_label, smoothed, hemi='R', space=space)
+            
+            return pd.concat((prf_l, prf_r), axis=0, 
+                    keys=pd.Index(['L', 'R'], name='hemi'))
+
+        key = 'encoding_model'
+
+        key += f'.model{model_label}'
+
+        if gaussian:
+            key += '.gaussian'
+        else:
+            raise NotImplementedError
+
+        if smoothed:
+            key += '.smoothed'
+
+        parameters = []
+
+        dir = op.join(self.bids_folder, 'derivatives', key, f'sub-{self.subject_id}', 'func')
+        fn_template =  op.join(dir, 'sub-{subject_id}_acq-mb{multiband}_desc-{parameter_key}.optim_space-fsnative_hemi-{hemi}.func.gii')
+
+        for parameter_key in parameter_keys:
+
+            fn = fn_template.format(multiband=multiband, parameter_key=parameter_key, subject_id=self.subject_id, hemi=hemi, space=space)
+
+            pars = pd.Series(surface.load_surf_data(fn))
+            pars.index.name = 'vertex'
+
+            parameters.append(pars)
+
+        return pd.concat(parameters, axis=1, keys=parameter_keys, names=['parameter'])
+
