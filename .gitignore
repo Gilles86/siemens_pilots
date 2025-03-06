@@ -1,0 +1,7 @@
+# .egg stuff
+*.egg-info
+*.egg
+.DS_Store
+*.pyc
+*.mp4
+*.gif
