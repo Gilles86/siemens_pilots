@@ -25,14 +25,23 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
     ims = []
     onsets = []
     keys = []
-    for session in [1, 2, 3]:
-        for repetition in [1,2]:
-            run = get_run_from_mb(mb, session, repetition)
-            ims.append(sub.get_bold(session, mb=mb, repetition=repetition))
+
+    if mb == - 1:
+        session = 'philips'
+        for run in range(1, 9):
+            ims.append(sub.get_bold(session, mb=mb, run=run))
             onsets.append(sub.get_onsets(session, run))
             keys.append((session, run))
             print('Minimum onset: ', onsets[-1].onset.min())
             print('Maximum onset: ', onsets[-1].onset.max())
+
+    else:
+        for session in [1, 2, 3]:
+            for repetition in [1,2]:
+                run = get_run_from_mb(mb, session, repetition)
+                ims.append(sub.get_bold(session, mb=mb, repetition=repetition))
+                onsets.append(sub.get_onsets(session, run))
+                keys.append((session, run))
 
     onsets = pd.concat(onsets, keys=keys, names=['session', 'run'])
 
