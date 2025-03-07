@@ -67,7 +67,7 @@ class Subject(object):
             if task == 'feedback':
                 runs = [1, 5]
             elif task == 'estimation_task':
-                runs = list(range(1, 7))
+                runs = self.get_runs(session)
 
             for run in runs:
                 try:
@@ -79,7 +79,11 @@ class Subject(object):
                     else:
                         d['range'] = 'narrow'
 
-                    d['multiband'] = mb_orders[session-1][(run - 1) % 3]
+                    if session == 'philips':
+                        d['multiband'] = -1
+                    else:
+                        d['multiband'] = mb_orders[session-1][(run - 1) % 3]
+                        
                     keys.append((self.subject_id, task, run))
                     df.append(d)
                 except Exception as e:
@@ -111,7 +115,7 @@ class Subject(object):
         return df
 
     def get_sessions(self):
-        return [1,2,3]
+        return [1,2,3, 'philips']
 
     def get_bold(self, session, run=None, repetition=None, mb=None):
 
@@ -151,7 +155,11 @@ class Subject(object):
         return onsets
 
     def get_runs(self, session):
-        return list(range(1, 7))
+
+        if session == 'philips':
+            return list(range(1, 9))
+        else:
+            return list(range(1, 7))
 
     def get_single_trial_estimates(self, multiband, type='stim', smoothed=False, roi=None):
 
