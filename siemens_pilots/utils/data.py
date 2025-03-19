@@ -79,7 +79,7 @@ class Subject(object):
                     else:
                         d['range'] = 'narrow'
 
-                    if session == 'philips':
+                    if isinstance(session, str) and session.startswith('philips'):
                         d['multiband'] = -1
                     else:
                         d['multiband'] = mb_orders[session-1][(run - 1) % 3]
@@ -117,7 +117,7 @@ class Subject(object):
     def get_sessions(self):
         if self.subject_id == 'alina':
             return [1,2,3, 'philips']
-        elif self.subject_id in [41]:
+        elif self.subject_id in ['41']:
             return [1,2,3, 'philips1', 'philips2']
 
     def get_bold(self, session, run=None, repetition=None, mb=None):
@@ -155,11 +155,9 @@ class Subject(object):
         return onsets
 
     def get_runs(self, session):
-
-        if session.startswith('philips'):
-            return list(range(1, 9))
-        else:
-            return list(range(1, 7))
+        if isinstance(session, str) and session.lower().startswith('philips'):
+            return list(range(1, 9))  # 8 runs for Philips sessions
+        return list(range(1, 7))  # 6 runs for other sessions
 
     def get_single_trial_estimates(self, multiband, type='stim', smoothed=False, roi=None):
 
