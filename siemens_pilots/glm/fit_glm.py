@@ -111,8 +111,11 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
 
     opt = dict()
 
-    opt['sessionindicator'] = np.array([session for (session, run) in keys])[np.newaxis, :]
-    print(opt['sessionindicator'])
+    if mb != -1:
+        opt['sessionindicator'] = np.array([session for (session, run) in keys])[np.newaxis, :]
+        print(opt['sessionindicator'])
+    else:
+        print('Everything comes from single session!')
 
     # set important fields for completeness (but these would be enabled by default)
     opt['wantlibrary'] = 1
