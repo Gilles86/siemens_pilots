@@ -115,7 +115,10 @@ class Subject(object):
         return df
 
     def get_sessions(self):
-        return [1,2,3, 'philips']
+        if self.subject_id == 'alina':
+            return [1,2,3, 'philips']
+        elif self.subject_id in [41]:
+            return [1,2,3, 'philips1', 'philips2']
 
     def get_bold(self, session, run=None, repetition=None, mb=None):
 
@@ -134,12 +137,9 @@ class Subject(object):
 
         preproc_folder = Path(self.derivatives_dir, 'fmriprep', f'sub-{self.subject_id}', f'ses-{session}', 'func')
 
-        if session == 'philips':
+        if session in ['philips', 'philips1', 'philips2']:
             assert mb in [-1, None]
-            # sub-alina_ses-philips_task-task_run-1_space-T1w_desc-preproc_bold.nii.gz
-            fn = preproc_folder / f'sub-{self.subject_id}_ses-philips_task-task_run-{run}_space-T1w_desc-preproc_bold.nii.gz'
-
-
+            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-task_run-{run}_space-T1w_desc-preproc_bold.nii.gz'
         else:
             lr_direction = get_lr_direction(session, run)
             fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
@@ -156,7 +156,7 @@ class Subject(object):
 
     def get_runs(self, session):
 
-        if session == 'philips':
+        if session.startswith('philips'):
             return list(range(1, 9))
         else:
             return list(range(1, 7))
