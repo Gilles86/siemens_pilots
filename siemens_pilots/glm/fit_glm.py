@@ -27,13 +27,19 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
     keys = []
 
     if mb == - 1:
-        session = 'philips'
-        for run in range(1, 9):
-            ims.append(sub.get_bold(session, mb=mb, run=run))
-            onsets.append(sub.get_onsets(session, run))
-            keys.append((session, run))
-            print('Minimum onset: ', onsets[-1].onset.min())
-            print('Maximum onset: ', onsets[-1].onset.max())
+
+        if subject == 'alina':
+            sessions = ['philips']
+        else:
+            sessions = ['philips1', 'philips2']
+        
+        for session in sessions:
+            for run in range(1, 9):
+                ims.append(sub.get_bold(session, mb=mb, run=run))
+                onsets.append(sub.get_onsets(session, run))
+                keys.append((session, run))
+                print('Minimum onset: ', onsets[-1].onset.min())
+                print('Maximum onset: ', onsets[-1].onset.max())
 
     else:
         for session in [1, 2, 3]:
@@ -68,6 +74,8 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
         
         # Load the image to extract the repetition time (TR) from the header
         tr = image.load_img(im).header['pixdim'][4]  # TR is stored in the 5th index of 'pixdim'
+
+        print(f'WARNING, TR is {tr}')
 
         # Extract the number of volumes (time points) in the fMRI image
         n = image.load_img(im).shape[-1]  # Last dimension is the time dimension
