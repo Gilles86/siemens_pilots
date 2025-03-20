@@ -175,7 +175,11 @@ class Subject(object):
 
         im = image.load_img(fn, dtype=np.float32)
 
-        n_volumes = 240
+        if (multiband in [-1]) and (self.subject_id != 'alina'):
+            n_volumes = 480
+        else:
+            n_volumes = 240
+
         assert(im.shape[3] == n_volumes), f'Expected {n_volumes} volumes, got {im.shape[3]}'
 
         return im
