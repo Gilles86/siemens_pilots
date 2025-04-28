@@ -47,7 +47,7 @@ def main(subject, multiband, smoothed, model_label=1, bids_folder='/data/ds-siem
     pred = model.predict(parameters=pars, paradigm=paradigm)
     r2 = get_rsq(data, pred)
 
-    target_fn = op.join(target_dir, f'sub-{subject}_desc-r2.optim_space-T1w_pars.nii.gz')
+    target_fn = op.join(target_dir, f'sub-{subject}_acq-mb{multiband}_desc-r2.optim_space-T1w_pars.nii.gz')
     masker.inverse_transform(r2).to_filename(target_fn)
 
     pars = get_conditionspecific_parameters(model_label, model, pars, gaussian=gaussian)
@@ -56,7 +56,7 @@ def main(subject, multiband, smoothed, model_label=1, bids_folder='/data/ds-siem
 
     for range_n, values in pars.groupby('range'):
         for par, value in values.T.iterrows():
-            target_fn = op.join(target_dir, f'sub-{subject}_desc-{par}.{range_n}.optim_space-T1w_pars.nii.gz')
+            target_fn = op.join(target_dir, f'sub-{subject}_acq-mb{multiband}_desc-{par}.{range_n}.optim_space-T1w_pars.nii.gz')
             masker.inverse_transform(value).to_filename(target_fn)
 
 if __name__ == '__main__':
