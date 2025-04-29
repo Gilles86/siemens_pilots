@@ -153,7 +153,7 @@ class Subject(object):
         else:
 
             if self.subject_id in ['13']:
-                fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_space-T1w_desc-preproc_bold.nii.gz'
+                fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
             else:
                 lr_direction = get_lr_direction(session, run)
                 fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
