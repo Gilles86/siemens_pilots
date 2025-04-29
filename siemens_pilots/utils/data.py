@@ -8,9 +8,8 @@ from nilearn.input_data import NiftiMasker
 from tqdm.contrib.itertools import product
 from itertools import product as product_
 
-mb_orders = [[0, 2, 4], [4, 2, 0], [2, 0, 4]]
 
-def get_lr_direction(session, run):
+def get_lr_direction(session, run, mb_orders):
     mb = mb_orders[session-1][(run-1) % 3]
     repetition = (run-1) // 3 + 1
 
@@ -27,7 +26,7 @@ def get_lr_direction(session, run):
         else:
             return 'LR'
 
-def get_run_from_mb(mb, session, repetition):
+def get_run_from_mb(mb, session, repetition, mb_orders):
     return mb_orders[session-1].index(mb) + (repetition-1) * 3 + 1
 class Subject(object):
 
@@ -40,6 +39,13 @@ class Subject(object):
         self.bids_folder = bids_folder
 
         self.derivatives_dir = op.join(bids_folder, 'derivatives')
+
+    def get_mb_orders(self):
+
+        if self.subject_id not in ['13']:
+            return [[0, 2, 4], [4, 2, 0], [2, 0, 4]]
+        else:
+            return [[2, 4, 5], [5, 4, 2], [4, 2, 5]]
 
 
     def get_behavioral_data(self, session=None, tasks=None, raw=False, multiband=None, add_info=True):
@@ -59,6 +65,7 @@ class Subject(object):
 
         behavior_folder = op.join(self.bids_folder, 'sourcedata', 'behavior', f'sub-{self.subject_id}', f'ses-{session}', )
 
+        mb_orders = self.get_mb_orders()
 
         df = []
         keys = []
@@ -117,18 +124,21 @@ class Subject(object):
     def get_sessions(self):
         if self.subject_id == 'alina':
             return [1,2,3, 'philips']
-        elif self.subject_id in ['41']:
-            return [1,2,3, 'philips1', 'philips2']
+        elif self.subject_id in ['13', '41']:
+            return [1,2,3]
 
     def get_bold(self, session, run=None, repetition=None, mb=None):
 
         assert(run is not None or ((repetition is not None) and (mb is not None))), 'Either run or repetition and mb must be specified'
 
         if run is None:
-            assert mb in [0, 2, 4], 'mb must be 0, 2 or 4'
+            assert mb in [0, 2, 4, 5], 'mb must be 0, 2 or 4'
 
             assert repetition in [1,2], 'repetition must be 1 or 2'
             run = get_run_from_mb(mb, session, repetition)
+
+
+        mb_orders = self.get_mb_orders()
 
         if mb is None:
             mb = mb_orders[session-1][(run - 1) % 3]
@@ -141,8 +151,12 @@ class Subject(object):
             assert mb in [-1, None]
             fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-task_run-{run}_space-T1w_desc-preproc_bold.nii.gz'
         else:
-            lr_direction = get_lr_direction(session, run)
-            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
+
+            if self.subject_id in ['13']:
+                fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_space-T1w_desc-preproc_bold.nii.gz'
+            else:
+                lr_direction = get_lr_direction(session, run)
+                fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
 
         assert(fn.exists()), f'File {fn} does not exist'
 

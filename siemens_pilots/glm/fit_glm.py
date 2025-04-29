@@ -42,9 +42,10 @@ def main(subject, mb, fit_both_pes, encoding_direction=None,
                 print('Maximum onset: ', onsets[-1].onset.max())
 
     else:
+        mb_orders = sub.get_mb_orders()
         for session in [1, 2, 3]:
             for repetition in [1,2]:
-                run = get_run_from_mb(mb, session, repetition)
+                run = get_run_from_mb(mb, session, repetition, mb_orders)
                 ims.append(sub.get_bold(session, mb=mb, repetition=repetition))
                 onsets.append(sub.get_onsets(session, run))
                 keys.append((session, run))
