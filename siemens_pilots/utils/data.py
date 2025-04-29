@@ -135,7 +135,7 @@ class Subject(object):
             assert mb in [0, 2, 4, 5], 'mb must be 0, 2 or 4'
 
             assert repetition in [1,2], 'repetition must be 1 or 2'
-            run = get_run_from_mb(mb, session, repetition)
+            run = get_run_from_mb(mb, session, repetition, self.get_mb_orders())
 
 
         mb_orders = self.get_mb_orders()
