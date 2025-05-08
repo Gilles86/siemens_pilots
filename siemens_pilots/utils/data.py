@@ -125,7 +125,7 @@ class Subject(object):
         if self.subject_id == 'alina':
             return [1,2,3, 'philips']
         elif self.subject_id in ['13', '41']:
-            return [1,2,3]
+            return [1,2,3, 'philips1', 'philips2']
 
     def get_bold(self, session, run=None, repetition=None, mb=None):
 
@@ -206,11 +206,16 @@ class Subject(object):
         session = 1 if session is None else session
 
         # sub-alina_ses-1_task-numestimate_acq-mb0_dir-LR_run-01_desc-brain_mask.nii.gz
-        fn = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}',
-                    f'ses-{session}', 'func', 
-                    f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-brain_mask.nii.gz')
+        if self.subject_id in ['13']:
+            fn = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}',
+                        f'ses-{session}', 'func', 
+                        f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb2_run-01_space-T1w_desc-brain_mask.nii.gz')
+        else:
+            fn = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}',
+                        f'ses-{session}', 'func', 
+                        f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb0_dir-LR_run-01_space-T1w_desc-brain_mask.nii.gz')
 
-        mask_img = image.load_img(fn)
+        mask_img = fn
 
         if debug_mask:
             # Convert to numpy array
