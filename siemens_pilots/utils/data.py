@@ -42,7 +42,7 @@ class Subject(object):
 
     def get_mb_orders(self):
 
-        if self.subject_id not in ['13']:
+        if self.subject_id not in ['03', '13']:
             return [[0, 2, 4], [4, 2, 0], [2, 0, 4]]
         else:
             return [[2, 4, 5], [5, 4, 2], [4, 2, 5]]
@@ -126,6 +126,8 @@ class Subject(object):
             return [1,2,3, 'philips']
         elif self.subject_id in ['13', '41']:
             return [1,2,3, 'philips1', 'philips2']
+        elif self.subject_id in ['03']:
+            return [1,2, 3]
 
     def get_bold(self, session, run=None, repetition=None, mb=None):
 
@@ -152,7 +154,7 @@ class Subject(object):
             fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-task_run-{run}_space-T1w_desc-preproc_bold.nii.gz'
         else:
 
-            if self.subject_id in ['13']:
+            if self.subject_id in ['03', '13']:
                 fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
             else:
                 lr_direction = get_lr_direction(session, run)
@@ -206,7 +208,7 @@ class Subject(object):
         session = 1 if session is None else session
 
         # sub-alina_ses-1_task-numestimate_acq-mb0_dir-LR_run-01_desc-brain_mask.nii.gz
-        if self.subject_id in ['13']:
+        if self.subject_id in ['03', '13']:
             fn = op.join(self.bids_folder, 'derivatives', 'fmriprep', f'sub-{self.subject_id}',
                         f'ses-{session}', 'func', 
                         f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb2_run-01_space-T1w_desc-brain_mask.nii.gz')
