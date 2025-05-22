@@ -440,3 +440,42 @@ class Subject(object):
 
         return pd.concat(parameters, axis=1, keys=parameter_keys, names=['parameter'])
 
+    def get_confounds(self, session=1, run=1, confounds=None):
+
+        def filter_confounds(confounds, n_acompcorr=10):
+            confound_cols = ['dvars', 'framewise_displacement']
+
+            a_compcorr_cols = [f"a_comp_cor_{i:02d}" for i in range(n_acompcorr)]
+            confound_cols += a_compcorr_cols
+
+            motion_cols = ['trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z']
+            motion_cols += [f'{e}_derivative1' for e in motion_cols]
+            confound_cols += motion_cols
+
+            steady_state_cols = [c for c in confounds.columns if 'non_steady_state' in c]
+            confound_cols += steady_state_cols
+
+            outlier_cols = [c for c in confounds.columns if 'motion_outlier' in c]
+            confound_cols += outlier_cols
+
+            cosine_cols = [c for c in confounds.columns if 'cosine' in c]
+            confound_cols += cosine_cols
+
+            
+            return confounds[confound_cols].fillna(0)
+
+        mb_orders = self.get_mb_orders()
+        mb = mb_orders[session-1][(run - 1) % 3]
+        
+        preproc_folder = Path(self.derivatives_dir, 'fmriprep', f'sub-{self.subject_id}', f'ses-{session}', 'func')
+
+        if self.subject_id in ['13']:
+            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_desc-confounds_timeseries.tsv'
+        else:
+            lr_direction = get_lr_direction(session, run)
+            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_desc-confounds_timeseries.tsv'
+
+        confounds = pd.read_csv(fn, sep='\t')
+        confounds = filter_confounds(confounds)
+
+        return confounds
