@@ -157,7 +157,7 @@ class Subject(object):
             if self.subject_id in ['03', '13']:
                 fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
             else:
-                lr_direction = get_lr_direction(session, run)
+                lr_direction = get_lr_direction(session, run, mb_orders=mb_orders)
                 fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_space-T1w_desc-preproc_bold.nii.gz'
 
         assert(fn.exists()), f'File {fn} does not exist'
@@ -482,7 +482,7 @@ class Subject(object):
             if self.subject_id in ['03', '13']:
                 fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_desc-confounds_timeseries.tsv'
             else:
-                lr_direction = get_lr_direction(session, run)
+                lr_direction = get_lr_direction(session, run, mb_orders=mb_orders)
                 fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_desc-confounds_timeseries.tsv'
 
         confounds = pd.read_csv(fn, sep='\t')
