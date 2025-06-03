@@ -466,16 +466,24 @@ class Subject(object):
             
             return confounds[confound_cols].fillna(0)
 
-        mb_orders = self.get_mb_orders()
-        mb = mb_orders[session-1][(run - 1) % 3]
+        if str(session).startswith('philips'):
+            mb = -1
+        else:
+            mb_orders = self.get_mb_orders()
+            mb = mb_orders[session-1][(run - 1) % 3]
         
         preproc_folder = Path(self.derivatives_dir, 'fmriprep', f'sub-{self.subject_id}', f'ses-{session}', 'func')
 
-        if self.subject_id in ['13']:
-            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_desc-confounds_timeseries.tsv'
+        if mb == -1:
+            # sub-13_ses-philips1_task-task_run-1_desc-confounds_timeseries.tsv
+            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-task_run-{run}_desc-confounds_timeseries.tsv'
+
         else:
-            lr_direction = get_lr_direction(session, run)
-            fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_desc-confounds_timeseries.tsv'
+            if self.subject_id in ['03', '13']:
+                fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_run-{run:02d}_desc-confounds_timeseries.tsv'
+            else:
+                lr_direction = get_lr_direction(session, run)
+                fn = preproc_folder / f'sub-{self.subject_id}_ses-{session}_task-numestimate_acq-mb{mb}_dir-{lr_direction}_run-{run:02d}_desc-confounds_timeseries.tsv'
 
         confounds = pd.read_csv(fn, sep='\t')
         confounds = filter_confounds(confounds)
